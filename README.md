@@ -1,110 +1,212 @@
-# FHEVM Hardhat Template
+# FairRoll
 
-A Hardhat-based template for developing Fully Homomorphic Encryption (FHE) enabled Solidity smart contracts using the
-FHEVM protocol by Zama.
+FairRoll is a privacy-preserving dice game built on Zama FHEVM. Players convert ETH into encrypted points, submit an
+encrypted "big" or "small" guess, and earn encrypted rewards when their guess matches the on-chain dice roll.
 
-## Quick Start
+## Overview
 
-For detailed instructions see:
-[FHEVM Hardhat Quick Start Tutorial](https://docs.zama.ai/protocol/solidity-guides/getting-started/quick-start-tutorial)
+FairRoll combines on-chain randomness with fully homomorphic encryption (FHE) so that guesses, balances, and rewards
+stay private. The contract only stores encrypted handles; users decrypt their own data client-side through the Zama
+relayer flow.
 
-### Prerequisites
+## Game Rules
 
-- **Node.js**: Version 20 or higher
-- **npm or yarn/pnpm**: Package manager
+- Exchange rate: 1 ETH = 100,000 points.
+- Guess format: big = 1, small = 2.
+- Dice roll: random integer from 1 to 6, generated on-chain via Zama FHE.
+- Win condition: big wins on 4-6, small wins on 1-3.
+- Reward: 1,000 points for a correct guess, 0 points otherwise.
 
-### Installation
+## Problems Solved
 
-1. **Install dependencies**
+- **Private player decisions**: Guess data is encrypted before it hits the chain, preventing copy-trading or
+  front-running based on guess visibility.
+- **Fair randomness**: The dice roll is produced on-chain using Zama FHE randomness, avoiding off-chain oracles.
+- **Confidential balances**: Points are stored as encrypted values, so player balances and rewards are not publicly
+  visible.
+- **Self-serve decryption**: Players can decrypt their own data without revealing it to other users.
 
-   ```bash
-   npm install
-   ```
+## Advantages
 
-2. **Set up environment variables**
+- **Confidential gameplay**: No plaintext guesses or payouts are revealed on-chain.
+- **Deterministic rules**: All game logic is enforced by the contract, with immutable rates and rewards.
+- **Client-controlled privacy**: Only the player can decrypt their balance and latest round data.
+- **Simple UX**: Two-step flow (buy points, play a round) with clear on-chain status updates.
+- **Composable tooling**: Hardhat tasks let developers verify gameplay and decryption from the CLI.
 
-   ```bash
-   npx hardhat vars set MNEMONIC
+## How It Works
 
-   # Set your Infura API key for network access
-   npx hardhat vars set INFURA_API_KEY
+1. **Buy points**: The player calls `buyPoints` with ETH. The contract mints encrypted points at a fixed rate.
+2. **Encrypt guess**: The frontend encrypts the guess (1 or 2) using the Zama relayer SDK.
+3. **Play round**: The player submits the encrypted guess to `playRound`.
+4. **Generate dice**: The contract computes a random encrypted dice value (1-6).
+5. **Evaluate winner**: The contract compares the encrypted guess with the dice outcome and updates the encrypted
+   balance.
+6. **Decrypt results**: The player signs an EIP-712 request and decrypts their encrypted handles client-side.
 
-   # Optional: Set Etherscan API key for contract verification
-   npx hardhat vars set ETHERSCAN_API_KEY
-   ```
+## Smart Contract Details
 
-3. **Compile and test**
+Contract: `contracts/FairRoll.sol`
 
-   ```bash
-   npm run compile
-   npm run test
-   ```
+- `buyPoints()` converts ETH to encrypted points.
+- `playRound(externalEuint8 guess, bytes inputProof)` runs a round with an encrypted guess.
+- `getEncryptedBalance(address player)` returns the encrypted point handle.
+- `getLastRound(address player)` returns encrypted handles for the last dice, guess, and reward.
+- `REWARD_POINTS` is 1,000.
+- `POINTS_PER_ETH` is 100,000.
 
-4. **Deploy to local network**
+## Frontend Details
 
-   ```bash
-   # Start a local FHEVM-ready node
-   npx hardhat node
-   # Deploy to local network
-   npx hardhat deploy --network localhost
-   ```
+Frontend: `frontend/`
 
-5. **Deploy to Sepolia Testnet**
+- **Write calls** use ethers (for signing and transaction submission).
+- **Read calls** use viem/wagmi (for lightweight contract reads).
+- **Encryption/decryption** uses the Zama relayer SDK and EIP-712 signatures.
+- **No local chain support**: the app targets Sepolia only.
+- **ABI handling**: copy the ABI from `deployments/sepolia/FairRoll.json` into
+  `frontend/src/config/contracts.ts` (no JSON imports inside the frontend).
 
-   ```bash
-   # Deploy to Sepolia
-   npx hardhat deploy --network sepolia
-   # Verify contract on Etherscan
-   npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
-   ```
+## Tech Stack
 
-6. **Test on Sepolia Testnet**
+- **Smart contracts**: Solidity, Hardhat, hardhat-deploy
+- **FHE**: Zama FHEVM Solidity library and relayer flow
+- **Frontend**: React + Vite, wagmi, viem, RainbowKit, ethers
+- **Testing**: Hardhat + Chai + FHEVM plugin
 
-   ```bash
-   # Once deployed, you can run a simple test on Sepolia.
-   npx hardhat test --network sepolia
-   ```
-
-## 📁 Project Structure
+## Repository Structure
 
 ```
-fhevm-hardhat-template/
-├── contracts/           # Smart contract source files
-│   └── FHECounter.sol   # Example FHE counter contract
-├── deploy/              # Deployment scripts
-├── tasks/               # Hardhat custom tasks
-├── test/                # Test files
-├── hardhat.config.ts    # Hardhat configuration
-└── package.json         # Dependencies and scripts
+.
+├── contracts/            # Solidity contracts
+├── deploy/               # Deployment scripts
+├── deployments/          # Deployed artifacts (per network)
+├── tasks/                # Hardhat tasks
+├── test/                 # Hardhat tests
+├── frontend/             # React app
+├── docs/                 # Zama docs references
+└── hardhat.config.ts     # Hardhat config
 ```
 
-## 📜 Available Scripts
+## Prerequisites
 
-| Script             | Description              |
-| ------------------ | ------------------------ |
-| `npm run compile`  | Compile all contracts    |
-| `npm run test`     | Run all tests            |
-| `npm run coverage` | Generate coverage report |
-| `npm run lint`     | Run linting checks       |
-| `npm run clean`    | Clean build artifacts    |
+- Node.js 20+
+- npm
+- Sepolia ETH for transactions
+- Zama FHEVM dependencies (installed via npm)
 
-## 📚 Documentation
+## Configuration
 
-- [FHEVM Documentation](https://docs.zama.ai/fhevm)
-- [FHEVM Hardhat Setup Guide](https://docs.zama.ai/protocol/solidity-guides/getting-started/setup)
-- [FHEVM Testing Guide](https://docs.zama.ai/protocol/solidity-guides/development-guide/hardhat/write_test)
-- [FHEVM Hardhat Plugin](https://docs.zama.ai/protocol/solidity-guides/development-guide/hardhat)
+Create a `.env` file in the repository root with the following keys:
 
-## 📄 License
+```
+INFURA_API_KEY=...
+PRIVATE_KEY=...
+ETHERSCAN_API_KEY=...   # Optional, for contract verification
+REPORT_GAS=1            # Optional, enables gas reporter
+```
 
-This project is licensed under the BSD-3-Clause-Clear License. See the [LICENSE](LICENSE) file for details.
+Notes:
+- `PRIVATE_KEY` is required for Sepolia deployment. Do not use a mnemonic.
+- The frontend does not read environment variables.
 
-## 🆘 Support
+## Local Development (Contracts)
 
-- **GitHub Issues**: [Report bugs or request features](https://github.com/zama-ai/fhevm/issues)
-- **Documentation**: [FHEVM Docs](https://docs.zama.ai)
-- **Community**: [Zama Discord](https://discord.gg/zama)
+Install dependencies:
 
----
+```bash
+npm install
+```
 
-**Built with ❤️ by the Zama team**
+Compile and run unit tests (mock FHE):
+
+```bash
+npm run compile
+npm run test
+```
+
+Run the Hardhat node and deploy locally (contract-only):
+
+```bash
+npx hardhat node
+npx hardhat deploy --network hardhat
+```
+
+## Sepolia Deployment (Required for the Frontend)
+
+Run tasks and tests first, then deploy:
+
+```bash
+npx hardhat test
+npx hardhat deploy --network sepolia
+```
+
+Optionally verify the contract:
+
+```bash
+npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
+```
+
+After deployment:
+
+1. Copy the ABI from `deployments/sepolia/FairRoll.json`.
+2. Update `frontend/src/config/contracts.ts` with the ABI and deployed address.
+
+## Hardhat Tasks
+
+Print the deployed address:
+
+```bash
+npx hardhat task:address --network sepolia
+```
+
+Buy points from the CLI:
+
+```bash
+npx hardhat task:buy --eth 0.1 --network sepolia
+```
+
+Play a round:
+
+```bash
+npx hardhat task:play --guess 1 --network sepolia
+```
+
+Decrypt a balance:
+
+```bash
+npx hardhat task:balance --account <ADDRESS> --network sepolia
+```
+
+## Frontend Setup
+
+From `frontend/`:
+
+```bash
+npm install
+npm run dev
+```
+
+Open the app, connect a wallet on Sepolia, and:
+
+1. Buy points with ETH.
+2. Submit an encrypted guess.
+3. Decrypt to reveal the dice, guess, reward, and updated balance.
+
+## Limitations
+
+- Points are not redeemable for ETH in the current contract.
+- Only the last round is stored; there is no on-chain round history.
+- Privacy relies on the Zama relayer flow and user key management.
+- This repository has not been formally audited.
+
+## Roadmap
+
+- Add encrypted leaderboards and seasonal scoring.
+- Support multiple simultaneous rounds per player.
+- Add configurable reward schedules or house edge parameters.
+- Add event indexing helpers for analytics without revealing private data.
+- Expand frontend UX with round history exported from client-side decryption.
+
+## License
+
+BSD-3-Clause-Clear. See `LICENSE`.
